@@ -214,3 +214,9 @@ native/fts5_cjk/*.so
 .lazy-refresh-incomplete
 .skills_prompt_snapshot.json
 assets/bgm/
+
+# Output artifacts
+banner.png
+*.mp4
+*.png
+
