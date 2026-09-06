@@ -1,264 +1,283 @@
-<p align="center">
-  <img src="assets/banner.png" alt="Hermes Agent" width="100%">
-</p>
+# zai2api — Hermes Agent 定制版
 
-# Hermes Agent ☤
-<p align="center">
-  <a href="https://hermes-agent.nousresearch.com/">Hermes Agent</a> | <a href="https://hermes-agent.nousresearch.com/">Hermes Desktop</a>
-</p>
-<p align="center">
-  <a href="https://hermes-agent.nousresearch.com/docs/"><img src="https://img.shields.io/badge/Docs-hermes--agent.nousresearch.com-FFD700?style=for-the-badge" alt="Documentation"></a>
-  <a href="https://discord.gg/NousResearch"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://github.com/NousResearch/hermes-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
-  <a href="https://nousresearch.com"><img src="https://img.shields.io/badge/Built%20by-Nous%20Research-blueviolet?style=for-the-badge" alt="Built by Nous Research"></a>
-  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/Lang-中文-red?style=for-the-badge" alt="中文"></a>
-  <a href="README.ur-pk.md"><img src="https://img.shields.io/badge/Lang-اردو-green?style=for-the-badge" alt="اردو"></a>
-  <a href="README.es.md"><img src="https://img.shields.io/badge/Lang-Español-orange?style=for-the-badge" alt="Español"></a>
-</p>
+基于 [Nous Research Hermes Agent](https://github.com/NousResearch/hermes-agent) 的定制部署，包含：
 
-**The self-improving AI agent built by [Nous Research](https://nousresearch.com).** It's the only agent with a built-in learning loop — it creates skills from experience, improves them during use, nudges itself to persist knowledge, searches its own past conversations, and builds a deepening model of who you are across sessions. Run it on a $5 VPS, a GPU cluster, or serverless infrastructure that costs nearly nothing when idle. It's not tied to your laptop — talk to it from Telegram while it works on a cloud VM.
-
-Use any model you want — [Nous Portal](https://portal.nousresearch.com), OpenRouter, OpenAI, your own endpoint, and [many others](https://hermes-agent.nousresearch.com/docs/integrations/providers). Switch with `hermes model` — no code changes, no lock-in.
-
-<table>
-<tr><td><b>A real terminal interface</b></td><td>Full TUI with multiline editing, slash-command autocomplete, conversation history, interrupt-and-redirect, and streaming tool output.</td></tr>
-<tr><td><b>Lives where you do</b></td><td>Telegram, Discord, Slack, WhatsApp, Signal, and CLI — all from a single gateway process. Voice memo transcription, cross-platform conversation continuity.</td></tr>
-<tr><td><b>A closed learning loop</b></td><td>Agent-curated memory with periodic nudges. Autonomous skill creation after complex tasks. Skills self-improve during use. FTS5 session search with LLM summarization for cross-session recall. <a href="https://github.com/plastic-labs/honcho">Honcho</a> dialectic user modeling. Compatible with the <a href="https://agentskills.io">agentskills.io</a> open standard.</td></tr>
-<tr><td><b>Scheduled automations</b></td><td>Built-in cron scheduler with delivery to any platform. Daily reports, nightly backups, weekly audits — all in natural language, running unattended.</td></tr>
-<tr><td><b>Delegates and parallelizes</b></td><td>Spawn isolated subagents for parallel workstreams. Write Python scripts that call tools via RPC, collapsing multi-step pipelines into zero-context-cost turns.</td></tr>
-<tr><td><b>Runs anywhere, not just your laptop</b></td><td>Seven terminal backends — local, Docker, SSH, Singularity, Modal, Daytona, and Vercel Sandbox. Daytona and Modal offer serverless persistence — your agent's environment hibernates when idle and wakes on demand, costing nearly nothing between sessions. Run it on a $5 VPS or a GPU cluster.</td></tr>
-<tr><td><b>Research-ready</b></td><td>Batch trajectory generation, trajectory compression for training the next generation of tool-calling models.</td></tr>
-</table>
+1. **zai2api 容器** — Z.AI GLM 模型的 OpenAI 兼容代理网关
+2. **三联屏视频管线** — AI 自动生成封面文案 + 渲染三联屏短视频
+3. **Hermes fallback 配置** — 完整的多层模型回退链路
 
 ---
 
-## Quick Install
+## 目录结构
 
-### Linux, macOS, WSL2, Termux
+```
+zai2api/
+├── assets/                  # 视频管线脚本
+│   ├── triptych_full.py     # 主入口：渲染 → 上传 → Telegram
+│   ├── auto_triptych.py     # 视频渲染引擎 v4
+│   ├── generate_copy.py     # AI 封面文案生成器
+│   ├── make_series_cover.py # 1280x720 封面图生成
+│   ├── pipeline_paths.py    # 路径常量共享
+│   ├── spare_titles.py      # 199 个备用中文标题
+│   └── bgm/                 # BGM 音乐文件
+├── zai2api-config/          # zai2api 容器配置与启动脚本
+│   ├── autostart.sh         # 自动启动脚本（含自动拉取镜像）
+│   ├── profile.sh           # /etc/profile.d/ hook
+│   └── setup.sh             # codespace 重建恢复脚本
+├── .persistedshare/         # Codespace 持久化数据
+│   └── zai2api-config/      # 加密配置 + 密码文件
+└── README.md                # 本文档
+```
+
+---
+
+## 快速开始
+
+### 1. 启动 zai2api 容器
 
 ```bash
-curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+# 首次设置
+bash zai2api-config/setup.sh
+
+# 日常使用 — 容器会自动启动（重启/重建后）
+bash ~/.zai2api-autostart.sh
 ```
 
-### Windows (native, PowerShell)
+容器配置：
+- 端口：`localhost:8080`
+- 认证：`Authorization: Bearer <AUTH_TOKEN>`（默认 `d3vin`）
+- Token 池：750 个 deviceToken（自动采集 + 补采）
 
-> **Heads up:** Native Windows runs Hermes without WSL — CLI, gateway, TUI, and tools all work natively. If you'd rather use WSL2, the Linux/macOS one-liner above works there too. Found a bug? Please [file issues](https://github.com/NousResearch/hermes-agent/issues).
-
-Run this in PowerShell:
-
-```powershell
-iex (irm https://hermes-agent.nousresearch.com/install.ps1)
-```
-
-The installer handles everything: uv, Python 3.11, Node.js, ripgrep, ffmpeg, **and a portable Git Bash** (MinGit, unpacked to `%LOCALAPPDATA%\hermes\git` — no admin required, completely isolated from any system Git install). Hermes uses this bundled Git Bash to run shell commands.
-
-If you already have Git installed, the installer detects it and uses that instead. Otherwise a ~45MB MinGit download is all you need — it won't touch or interfere with any system Git.
-
-> **Android / Termux:** The tested manual path is documented in the [Termux guide](https://hermes-agent.nousresearch.com/docs/getting-started/termux). On Termux, Hermes installs a curated `.[termux]` extra because the full `.[all]` extra currently pulls Android-incompatible voice dependencies.
->
-> **Windows:** Native Windows is fully supported — the PowerShell one-liner above installs everything. If you'd rather use WSL2, the Linux command works there too. Native Windows install lives under `%LOCALAPPDATA%\hermes`; WSL2 installs under `~/.hermes` as on Linux.
-
-After installation:
+### 2. 测试 API
 
 ```bash
-source ~/.bashrc    # reload shell (or: source ~/.zshrc)
-hermes              # start chatting!
+# 健康检查
+curl http://localhost:8080/healthz
+
+# 模型列表
+curl http://localhost:8080/v1/models \
+  -H "Authorization: Bearer d3vin"
+
+# 对话测试
+curl -N http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer d3vin" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"glm-5.2","messages":[{"role":"user","content":"hi"}]}'
 ```
 
-### Troubleshooting
-
-#### Windows Defender or antivirus flags `uv.exe` as malware
-
-If your antivirus (Bitdefender, Windows Defender, etc.) quarantines `uv.exe` from the Hermes `bin` folder (`%LOCALAPPDATA%\hermes\bin\uv.exe`), this is a **false positive**. The file is Astral's `uv` — the Rust Python package manager Hermes bundles to manage its Python environment. ML-based antivirus engines commonly flag unsigned Rust binaries that download and install packages.
-
-**To verify your copy is authentic:**
-
-```powershell
-# Install GitHub CLI if needed
-winget install --id GitHub.cli
-
-# Login to GitHub
-gh auth login
-
-# Run verification
-$uv = "$env:LOCALAPPDATA\hermes\bin\uv.exe"
-$ver = (& $uv --version).Split(' ')[1]
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$zip = "$env:TEMP\uv.zip"
-Invoke-WebRequest "https://github.com/astral-sh/uv/releases/download/$ver/uv-x86_64-pc-windows-msvc.zip" -OutFile $zip -UseBasicParsing
-gh attestation verify $zip --repo astral-sh/uv
-Expand-Archive $zip "$env:TEMP\uv_x" -Force
-(Get-FileHash "$env:TEMP\uv_x\uv.exe").Hash -eq (Get-FileHash $uv).Hash
-```
-
-If attestation says "Verification succeeded" and the last line prints `True`, you're good.
-
-**To whitelist Hermes:**
-- **Windows Defender:** Run PowerShell as Admin → `Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\hermes\bin"`
-- **Bitdefender:** Add an exception in the Bitdefender console (Protection > Antivirus > Settings > Manage Exceptions)
-- Whitelist the **folder**, not the file hash — Hermes updates `uv` and the hash changes every version
-
-For more context, see the upstream Astral reports: [astral-sh/uv#13553](https://github.com/astral-sh/uv/issues/13553), [astral-sh/uv#15011](https://github.com/astral-sh/uv/issues/15011), [astral-sh/uv#10079](https://github.com/astral-sh/uv/issues/10079).
-
----
-
-## Getting Started
+### 3. 生成视频
 
 ```bash
-hermes              # Interactive CLI — start a conversation
-hermes model        # Choose your LLM provider and model
-hermes tools        # Configure which tools are enabled
-hermes config set   # Set individual config values
-hermes config get   # Print individual config values
-hermes gateway      # Start the messaging gateway (Telegram, Discord, etc.)
-hermes setup        # Run the full setup wizard (configures everything at once)
-hermes claw migrate # Migrate from OpenClaw (if coming from OpenClaw)
-hermes update       # Update to the latest version
-hermes doctor       # Diagnose any issues
-```
+# 基本用法（手动指定文案）
+python3 assets/triptych_full.py <视频文件> \
+  --title 流光 \
+  --en RADIANCE \
+  --theme cool
 
-📖 **[Full documentation →](https://hermes-agent.nousresearch.com/docs/)**
+# AI 自动生成文案（需要 ZAI_API_KEY）
+python3 assets/triptych_full.py <视频文件> \
+  --auto-copy \
+  --no-upload \
+  --no-notify
+
+# 完整选项
+python3 assets/triptych_full.py <视频> \
+  --title 标题 --en ENGLISH \
+  --kicker "COOL · DARK VIBES" \
+  --tag "中文 tagline" \
+  --foot "for you" \
+  --theme cool \
+  --hero-at 0.0 \
+  --yoff -0.02 \
+  --intro 3.0 \
+  --fade-in 1.0 \
+  --fade-out 1.5 \
+  --afade-in 2.0 \
+  --afade-out 3.0 \
+  --upload \
+  --no-notify
+```
 
 ---
 
-## Skip the API-key collection — Nous Portal
+## 支持的模型
 
-Hermes works with whatever provider you want — that's not changing. But if you'd rather not collect five separate API keys for the model, web search, image generation, TTS, and a cloud browser, **[Nous Portal](https://portal.nousresearch.com)** covers all of them under one subscription:
+| 模型 | 需要通过 zai2api | 说明 |
+|------|-----------------|------|
+| `glm-4.7` | ✅ | guest 模式可用 |
+| `GLM-5-Turbo` | ✅ | 需要 ZAI_TOKEN |
+| `GLM-5v-Turbo` | ✅ | 需要 ZAI_TOKEN |
+| `GLM-5.1` | ✅ | 需要 ZAI_TOKEN |
+| `glm-5.2` | ✅ | 需要 ZAI_TOKEN |
 
-- **300+ models** — pick any of them with `/model <name>`
-- **Tool Gateway** — web search (Firecrawl), image generation (FAL), text-to-speech (OpenAI), cloud browser (Browser Use), all routed through your sub. No extra accounts.
+---
 
-One command from a fresh install:
+## Hermes Fallback 配置
+
+`~/.hermes/config.yaml` 中的 fallback 顺序（从高到低）：
+
+```yaml
+fallback_providers:
+  - name: zai2api-52          # glm-5.2（最先进）
+    provider: openai-compatible
+    base_url: http://localhost:8080/v1
+    model: glm-5.2
+    key_env: ZAI2API_AUTH_TOKEN
+
+  - name: zai2api-turbo       # GLM-5-Turbo
+    provider: openai-compatible
+    base_url: http://localhost:8080/v1
+    model: GLM-5-Turbo
+    key_env: ZAI2API_AUTH_TOKEN
+
+  - name: zai                 # glm-4.5-flash（Z.AI 官方 API）
+    provider: zai
+    base_url: https://api.z.ai/api/paas/v4
+    model: glm-4.5-flash
+    key_env: ZAI_API_KEY
+
+  - name: zai2api-47          # glm-4.7（兜底）
+    provider: openai-compatible
+    base_url: http://localhost:8080/v1
+    model: glm-4.7
+    key_env: ZAI2API_AUTH_TOKEN
+```
+
+环境变量（`~/.hermes/.env`）：
+```bash
+ZAI2API_AUTH_TOKEN=d3vin     # zai2api 认证
+ZAI_API_KEY=...              # Z.AI 官方 API（fallback 用）
+```
+
+---
+
+## zai2api 容器管理
+
+### 查看状态
+```bash
+docker ps | grep zai2api
+docker logs zai2api --tail 20
+curl http://localhost:8080/status | python3 -m json.tool
+```
+
+### 重启容器
+```bash
+docker restart zai2api
+```
+
+### Token 池状态
+```bash
+curl -s http://localhost:8080/status | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+print(f'用户: {d[\"userName\"]}')
+print(f'Token 池: {d[\"tokenCount\"]} / 750')
+print(f'连接状态: {\"✅\" if d[\"connected\"] else \"❌\"}')
+"
+```
+
+---
+
+## 视频管线详解
+
+### 工作流程
+
+```
+源视频 → hero 帧 → 封面 PNG → 片头卡 → 三联主体 → 拼接 + 淡入淡出 → BGM → 上传
+```
+
+### 各脚本职责
+
+| 脚本 | 功能 |
+|------|------|
+| `triptych_full.py` | 主入口：编排全流程 |
+| `auto_triptych.py` | 渲染引擎：封面 → 片头 → 三联 → 拼接 → BGM |
+| `generate_copy.py` | AI 文案生成：抽帧 → 描述 → 生成标题/副标/tagline |
+| `make_series_cover.py` | 封面图生成：1280x720，双色主题（cool/warm） |
+| `pipeline_paths.py` | 路径常量共享 |
+| `spare_titles.py` | 199 个备用中文标题 |
+
+### 封面文案格式
+
+AI 生成的文案包含：
+- `title` — 中文大标题（2字最佳）
+- `en` — 英文副标（全大写，3-6词）
+- `kicker` — 风格标签（如 "COOL · DARK VIBES"）
+- `tag` — 中文 tagline（10-20字）
+- `foot` — 英文页脚（2-4词）
+
+### 视频参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--intro` | 3.0s | 片头封面时长 |
+| `--fade-in` | 1.0s | 视频淡入 |
+| `--fade-out` | 1.5s | 视频淡出 |
+| `--afade-in` | 2.0s | 音频淡入 |
+| `--afade-out` | 3.0s | 音频淡出 |
+| `--theme` | warm | cool（冰蓝）/ warm（暖褐） |
+| `--hero-at` | 0.0s | 抽帧时间点 |
+| `--yoff` | -0.02 | 竖向裁切偏移 |
+
+---
+
+## Codespace 恢复
+
+### 正常重启
+容器 `--restart unless-stopped` 自动恢复，无需操作。
+
+### Codespace 重建后
+重建会清掉 `/etc/profile.d/` 和 `~/.zai2api-autostart.sh`，但持久化数据保留：
 
 ```bash
-hermes setup --portal
+# 运行恢复脚本
+bash /workspaces/zai2api/zai2api-config/setup.sh
 ```
 
-That logs you in via OAuth, sets Nous as your provider, and turns on the Tool Gateway. Check what's wired up any time with `hermes portal info`. Full details on the [Tool Gateway docs page](https://hermes-agent.nousresearch.com/docs/user-guide/features/tool-gateway).
-
-You can still bring your own keys per-tool whenever you want — the gateway is per-backend, not all-or-nothing.
-
----
-
-## CLI vs Messaging Quick Reference
-
-Hermes has two entry points: start the terminal UI with `hermes`, or run the gateway and talk to it from Telegram, Discord, Slack, WhatsApp, Signal, or Email. Once you're in a conversation, many slash commands are shared across both interfaces.
-
-| Action                         | CLI                                           | Messaging platforms                                                              |
-| ------------------------------ | --------------------------------------------- | -------------------------------------------------------------------------------- |
-| Start chatting                 | `hermes`                                      | Run `hermes gateway setup` + `hermes gateway start`, then send the bot a message |
-| Start fresh conversation       | `/new` or `/reset`                            | `/new` or `/reset`                                                               |
-| Change model                   | `/model [provider:model]`                     | `/model [provider:model]`                                                        |
-| Set a personality              | `/personality [name]`                         | `/personality [name]`                                                            |
-| Retry or undo the last turn    | `/retry`, `/undo`                             | `/retry`, `/undo`                                                                |
-| Compress context / check usage | `/compress`, `/usage`, `/insights [--days N]` | `/compress`, `/usage`, `/insights [days]`                                        |
-| Browse skills                  | `/skills` or `/<skill-name>`                  | `/<skill-name>`                                                                  |
-| Interrupt current work         | `Ctrl+C` or send a new message                | `/stop` or send a new message                                                    |
-| Platform-specific status       | `/platforms`                                  | `/status`, `/sethome`                                                            |
-
-For the full command lists, see the [CLI guide](https://hermes-agent.nousresearch.com/docs/user-guide/cli) and the [Messaging Gateway guide](https://hermes-agent.nousresearch.com/docs/user-guide/messaging).
+脚本会自动：
+1. 重建 `~/.zai2api-config/` 软链到持久化目录
+2. 复制 autostart 脚本到 `~/.zai2api-autostart.sh`
+3. 恢复 `/etc/profile.d/zai2api-autostart.sh`
+4. 启动容器（自动拉取最新镜像）
 
 ---
 
-## Documentation
+## 故障排查
 
-All documentation lives at **[hermes-agent.nousresearch.com/docs](https://hermes-agent.nousresearch.com/docs/)**:
-
-| Section                                                                                             | What's Covered                                             |
-| --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| [Quickstart](https://hermes-agent.nousresearch.com/docs/getting-started/quickstart)                 | Install → setup → first conversation in 2 minutes          |
-| [CLI Usage](https://hermes-agent.nousresearch.com/docs/user-guide/cli)                              | Commands, keybindings, personalities, sessions             |
-| [Configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration)                | Config file, providers, models, all options                |
-| [Messaging Gateway](https://hermes-agent.nousresearch.com/docs/user-guide/messaging)                | Telegram, Discord, Slack, WhatsApp, Signal, Home Assistant |
-| [Security](https://hermes-agent.nousresearch.com/docs/user-guide/security)                          | Command approval, DM pairing, container isolation          |
-| [Tools & Toolsets](https://hermes-agent.nousresearch.com/docs/user-guide/features/tools)            | 40+ tools, toolset system, terminal backends               |
-| [Skills System](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills)              | Procedural memory, Skills Hub, creating skills             |
-| [Memory](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory)                     | Persistent memory, user profiles, best practices           |
-| [MCP Integration](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp)               | Connect any MCP server for extended capabilities           |
-| [Cron Scheduling](https://hermes-agent.nousresearch.com/docs/user-guide/features/cron)              | Scheduled tasks with platform delivery                     |
-| [Context Files](https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files)       | Project context that shapes every conversation             |
-| [Architecture](https://hermes-agent.nousresearch.com/docs/developer-guide/architecture)             | Project structure, agent loop, key classes                 |
-| [Contributing](https://hermes-agent.nousresearch.com/docs/developer-guide/contributing)             | Development setup, PR process, code style                  |
-| [CLI Reference](https://hermes-agent.nousresearch.com/docs/reference/cli-commands)                  | All commands and flags                                     |
-| [Environment Variables](https://hermes-agent.nousresearch.com/docs/reference/environment-variables) | Complete env var reference                                 |
-
----
-
-## Migrating from OpenClaw
-
-If you're coming from OpenClaw, Hermes can automatically import your settings, memories, skills, and API keys.
-
-**During first-time setup:** The setup wizard (`hermes setup`) automatically detects `~/.openclaw` and offers to migrate before configuration begins.
-
-**Anytime after install:**
-
+### 容器无法启动
 ```bash
-hermes claw migrate              # Interactive migration (full preset)
-hermes claw migrate --dry-run    # Preview what would be migrated
-hermes claw migrate --preset user-data   # Migrate without secrets
-hermes claw migrate --overwrite  # Overwrite existing conflicts
+# 检查镜像
+docker image inspect zai2api:latest || docker pull ghcr.io/pingmike2/zai2api:latest
+
+# 检查 token 池
+curl -s http://localhost:8080/healthz
+
+# 查看日志
+docker logs zai2api --tail 50
 ```
 
-What gets imported:
+### zai2api 返回 401
+确认 `ZAI2API_AUTH_TOKEN` 与容器内 `AUTH_TOKEN` 一致。
 
-- **SOUL.md** — persona file
-- **Memories** — MEMORY.md and USER.md entries
-- **Skills** — user-created skills → `~/.hermes/skills/openclaw-imports/`
-- **Command allowlist** — approval patterns
-- **Messaging settings** — platform configs, allowed users, working directory
-- **API keys** — allowlisted secrets (Telegram, OpenRouter, OpenAI, Anthropic, ElevenLabs)
-- **TTS assets** — workspace audio files
-- **Workspace instructions** — AGENTS.md (with `--workspace-target`)
+### GLM-5 模型不可用
+确认 `ZAI_TOKEN` 已配置（检查 `docker exec zai2api env | grep ZAI_TOKEN`）。
 
-See `hermes claw migrate --help` for all options, or use the `openclaw-migration` skill for an interactive agent-guided migration with dry-run previews.
-
----
-
-## Contributing
-
-We welcome contributions! See the [Contributing Guide](https://hermes-agent.nousresearch.com/docs/developer-guide/contributing) for development setup, code style, and PR process.
-
-Quick start for contributors — use the standard installer, then work from the
-full git checkout it creates at `$HERMES_HOME/hermes-agent` (usually
-`~/.hermes/hermes-agent`). This matches the layout used by `hermes update`, the
-managed venv, lazy dependencies, gateway, and docs tooling.
-
+### 视频渲染失败
+确认已安装 ffmpeg：
 ```bash
-curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
-cd "${HERMES_HOME:-$HOME/.hermes}/hermes-agent"
-uv pip install -e ".[all,dev]"
-scripts/run_tests.sh
-```
-
-Manual clone fallback (for throwaway clones/CI where you intentionally do not
-want the managed install layout):
-
-Create the venv outside the cloned source tree — a venv inside the directory
-the agent operates from can be wiped by a relative-path command the agent runs
-against its own checkout, destroying the running runtime mid-session.
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv venv ~/.hermes/venvs/hermes-dev --python 3.11
-source ~/.hermes/venvs/hermes-dev/bin/activate
-uv pip install -e ".[all,dev]"
-scripts/run_tests.sh
+apt-get install -y ffmpeg
 ```
 
 ---
 
-## Community
+## 相关链接
 
-- 💬 [Discord](https://discord.gg/NousResearch)
-- 📚 [Skills Hub](https://agentskills.io)
-- 🐛 [Issues](https://github.com/NousResearch/hermes-agent/issues)
-- 🔌 [computer-use-linux](https://github.com/avifenesh/computer-use-linux) — Linux desktop-control MCP server for Hermes and other MCP hosts, with AT-SPI accessibility trees, Wayland/X11 input, screenshots, and compositor window targeting.
-- 🔌 [HermesClaw](https://github.com/AaronWong1999/hermesclaw) — Community WeChat bridge: Run Hermes Agent and OpenClaw on the same WeChat account.
+- [Hermes Agent 官方文档](https://hermes-agent.nousresearch.com/docs/)
+- [zai2api 上游仓库](https://github.com/pingmike2/zai2api)
+- [GLM-ZAI-2API 原版](https://github.com/D3-vin/GLM-ZAI-2API)
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
-
-Built by [Nous Research](https://nousresearch.com).
+MIT — 继承自 [Nous Research Hermes Agent](https://github.com/NousResearch/hermes-agent)。

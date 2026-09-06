@@ -80,8 +80,8 @@ def main() -> None:
     ap.add_argument("--outdir", default=None, help="输出目录(默认 out/)")
 
     c = ap.add_argument_group("封面文案")
-    c.add_argument("--title", required=True, help="中文大标题(两字最佳)")
-    c.add_argument("--en", required=True, help="英文副标")
+    c.add_argument("--title", default=None, help="中文大标题(两字最佳)")
+    c.add_argument("--en", default=None, help="英文副标")
     c.add_argument("--kicker", default="LOOP · SERIES")
     c.add_argument("--tag", default="", help="中文 tagline")
     c.add_argument("--foot", default="for you", help="页脚英文小字")
@@ -97,6 +97,8 @@ def main() -> None:
     t.add_argument("--afade-out", type=float, default=3.0)
     t.add_argument("--duration", type=float, default=None, help="冒烟测试用总时长(秒)")
 
+    ap.add_argument("--auto-copy", action="store_true",
+                    help="用AI自动生成封面文案(需ZAI_API_KEY)")
     ap.add_argument("--no-upload", action="store_true", help="不上传 gofile")
     ap.add_argument("--no-notify", action="store_true", help="不发 Telegram")
     ap.add_argument("--keep-temp", action="store_true", help="保留中间文件")
@@ -104,6 +106,36 @@ def main() -> None:
 
     outdir = Path(args.outdir).resolve() if args.outdir else OUT
     outdir.mkdir(parents=True, exist_ok=True)
+
+    # Auto-generate copy if requested
+    if args.auto_copy and not all([args.title, args.en]):
+        print("\n[AI文案生成]")
+        copy_script = Path(__file__).resolve().parent / "generate_copy.py"
+        cmd = [sys.executable, str(copy_script), args.video]
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        print(r.stdout)
+        if r.returncode != 0:
+            print(f"✗ AI文案生成失败: {r.stderr}")
+            sys.exit(1)
+        # Parse output to extract arguments
+        import re
+        title_m = re.search(r'--cover-title "([^"]+)"', r.stdout)
+        en_m = re.search(r'--cover-en "([^"]+)"', r.stdout)
+        if title_m and en_m:
+            args.title = title_m.group(1)
+            args.en = en_m.group(1)
+            args.kicker = re.search(r'--cover-kicker "([^"]+)"', r.stdout)
+            args.tag = re.search(r'--cover-tag "([^"]+)"', r.stdout)
+            args.foot = re.search(r'--cover-foot "([^"]+)"', r.stdout)
+            if args.kicker:
+                args.kicker = args.kicker.group(1)
+            if args.tag:
+                args.tag = args.tag.group(1)
+            if args.foot:
+                args.foot = args.foot.group(1)
+        else:
+            print("✗ 无法解析AI生成的文案")
+            sys.exit(1)
 
     # 1. Run auto_triptych.py
     auto_script = Path(__file__).resolve().parent / "auto_triptych.py"

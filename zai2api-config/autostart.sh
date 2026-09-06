@@ -62,11 +62,15 @@ EOF
     exit 0
   fi
 
-  # 2. 镜像在不在？
+  # 2. 镜像在不在？不在就自动拉（GHCR 公开免费）
   if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-    echo "[zai2api-autostart] ⚠️ 镜像 $IMAGE 不存在（codespace 重建？）"
-    echo "[zai2api-autostart] 需要手动: cd /workspaces/zai2api && docker build -t zai2api:latest ."
-    exit 0
+    echo "[zai2api-autostart] 镜像不存在，自动拉取..."
+    if docker pull ghcr.io/pingmike2/zai2api:latest 2>&1; then
+      echo "[zai2api-autostart] ✅ 镜像拉取成功"
+    else
+      echo "[zai2api-autostart] ❌ 镜像拉取失败，检查网络"
+      exit 1
+    fi
   fi
 
   # 3. 容器已经在跑？
